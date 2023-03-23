@@ -151,5 +151,168 @@ ls -l /bin/passwd # -rwsr-xr-x
 
 #### 5.3.2 SGID
 
+SGID 特殊权限有两种应用场景
+- 当对二进制程序进行设置时，能够让执行者临时获取文件所属组的权限
+- 当对目录进行设置时，则是让目录内新创建的文件自动继承该目录原有用户组的名称
 
+```sh
+mkdir testdir
+chmod -R 777 testdir
+chmod -R g+s testdir
+ls -ald testdir # drwxrwsrwx
+```
 
+- chmod
+  - change mode，用于设置文件的一般权限与特殊权限
+  - chmod [参数] 文件名
+
+```sh
+chmod 760 anacoda-ks.cfg
+```
+
+- chown
+  - change own，设置文件的所有者与所有组
+  - chown 所有者:所属组 文件名
+
+```sh
+chown qk:qk anaconda-ks.cfg
+chown -R qk:qk UI
+```
+
+以上两个命令对文件夹进行操作时，加上 -R 来表示递归
+
+#### SBIT
+
+Sticky Bit 保护位。可确保用户只能删除自己的文件，而不能删除其他用户的文件。
+当目录被设置 SBIT 特殊权限后，文件的其他用户权限部分的 x 执行权限就会被替换成 t 或 T，原本有 x 执行权限则会写成 t，原来没 x 执行权限则会被写成 T
+
+u+s 设置 SUID 权限
+u-s 取消 SUID 权限
+g+s 设置 SGID 权限
+g-s 取消 SGID 权限
+o+t 设置 SBIT 权限
+o-t 取消 SBIT 权限
+
+```sh
+chmod -R o+t linux/
+# 第一位为特殊权限，后三位为标准权限
+chmod -R 7777 linux/
+```
+
+### 5.4 文件的隐藏属性
+
+#### 5.4.1 chattr 命令
+
+- 用法：chattr [参数] 文件名称
+- 功能：设置文件的隐藏属性，change attribute，+ 为添加属性，- 为删除属性
+- 参数：
+  - i: 无法对文件进行修改；如果对目录设置了该参数，只能修改其中的子文件内容，而不能新建或删除文件
+  - a: 仅能追加内容，无法删除或覆盖内容
+  - s: 彻底从硬盘中删除
+- 示例
+```sh
+echo "for test" > test
+rm test
+echo "for test" > test
+chattr +a test
+rm test # Operation not permitted
+```
+
+#### 5.4.2 lsattr 命令
+
+- 用法：lsattr [参数] 文件名称
+- 功能：查看文件的隐藏权限
+- 示例
+```sh
+lsattr test
+```
+
+### 5.5 文件访问控制列表
+
+ACL： Access Control List
+针对指定的用户或用户组设置文件或目录的操作权限
+
+#### 5.5.1 setfacl 命令
+
+- 用法：setfcal [参数] 文件名称
+- 功能：set files ACL，用于管理文件的 ACL 规则
+- 参数：
+  - -m: 修改权限
+  - -M: 从文件中读取权限
+  - -x: 删除某个权限
+  - -b: 删除全部权限
+  - -R: 递归子目录
+- 示例：
+```sh
+# 普通用户原来无法进入 root 目录，现在可以进入了
+setfacl -Rm u:qk:rwx /root
+# 针对用户组进入设置
+setfacl -m g:qk:rw /etc/fstab
+# 删除一条指定的权限
+setfacl -x g:qk /etc/fstab
+```
+
+如果设置了 ACL ，文件属性中的 . 会变成 +
+
+#### 5.5.2 getfacl 命令
+
+- 用法：getfacl [参数] 文件名称
+- 功能：查看文件的 ACL 权限，get files ACL
+- 示例
+```sh
+getfacl /root
+```
+
+- 备份
+```sh
+getfacl -R home > backup.acl
+# 备份时已经指定了目录，在恢复时不需要写对应的目录名称
+setfacl --resore backup.acl
+```
+
+### 5.6 su 命令与 sudo 命令
+
+su 命令用来切换用户，使当前用户在不退出登录的情况下，顺畅地切换到其他用户。
+- - 意味着完全切换到新的用户，即把环境变量信息也变更为新用户的相关信息，则不是保留原始的信息。
+```
+su - qk
+```
+
+sudo 命令用于给普通用户提供额外的权限，语法为 sudo [参数] 用户名
+配置文件为 /etc/sudoers
+- 参数
+  - -h: 列出帮助信息
+  - -l: 列出当前用户可执行的命令
+  - -u 用户名或UID：以指定的用户身份执行命令
+  - -k: 清空密码的有效时间，下次执行 sudo 时需要再次进行密码验证
+  - -b: 在后台执行指定的命令
+
+也可以用 visudo 命令直接更改配置文件
+
+```sh
+谁可以使用 允许使用的主机 = （以谁的身份） 可执行命令的列表
+谁可以使用：稍后要为哪个用户进行命令授权
+允许使用的主机：可以填写 ALL 表示 不限制来源的主机，亦可填写如 192.168.10.0/24 这样的网段来限制地址
+以谁的身份：可以填写 ALL 表示 系统最高权限，也可以是另外一位用户的名字
+可执行命令的列表：可以填写 ALL 表示不限制命令，也可以填写如 /usr/bin/cat 这样的文件名称列表，用逗号隔开
+qk ALL=(ALL) ALL
+
+```
+
+```sh
+sudo -l # 会让输入当前用户的密码
+# qk 用户登录
+ls /root # Permission denied
+sudo ls /root # work
+```
+
+```sh
+# 配置 whereis
+qk ALL=(ALL) /usr/bin/cat,/usr/sbin/reboot
+```
+
+下次执行 sudo 不需要再输入密码
+
+```sh
+qk ALL=(ALL) NOPASSWD:/usr/bin/cat,/usr/sbin/reboot
+```
